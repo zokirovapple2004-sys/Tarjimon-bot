@@ -11,13 +11,14 @@ from gtts import gTTS
 # --- 1. SOZLAMALAR ---
 BOT_TOKEN = "8387200840:AAFMVfEWUhzB_C-25qjzajpQyRm5aF091hA"
 ADMIN_ID = 8431876566
+BOT_USERNAME = "@telegram_wbot"  # <-- OVOZLI XABARDA SHU NOM CHIQADI
 
 # --- 2. FLASK ---
 flask_app = Flask('')
 
 @flask_app.route('/')
 def home():
-    return "Bot V4.1 (Statistika) Ishlamoqda!"
+    return "Bot V4.2 (Fixed Audio) Ishlamoqda!"
 
 def run_http():
     flask_app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
@@ -26,7 +27,7 @@ def keep_alive():
     t = Thread(target=run_http)
     t.start()
 
-# --- 3. BAZA VA STATISTIKA ---
+# --- 3. BAZA ---
 def init_db():
     conn = sqlite3.connect('bot_users.db')
     c = conn.cursor()
@@ -43,7 +44,6 @@ def add_user(user_id, name):
         conn.commit()
     conn.close()
 
-# 📊 YANGI FUNKSIYA: Odam sonini sanash
 def get_count():
     conn = sqlite3.connect('bot_users.db')
     c = conn.cursor()
@@ -130,16 +130,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif text == "ℹ️ Info":
-        await update.message.reply_text("Bot V4.1 - Statistika qo'shildi.")
+        await update.message.reply_text("Bot V4.2 - Audio muammosi hal qilindi.")
         return
 
-    # 🔥 ADMIN PANEL (STATISTIKA SHU YERDA) 🔥
+    # ADMIN PANEL
     if text == "👑 Admin Panel" and user_id == ADMIN_ID:
-        odam_soni = get_count() # Bazadan sanab keladi
+        odam_soni = get_count()
         await update.message.reply_text(
             f"👑 <b>ADMIN PANEL</b>\n\n"
             f"👥 <b>Jami obunachilar:</b> {odam_soni} ta\n\n"
-            f"📢 Reklama yuborish uchun: <code>/send Xabar matni</code>",
+            f"📢 Xabar yuborish: <code>/send Xabar</code>",
             parse_mode="HTML"
         )
         return
@@ -170,7 +170,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['state'] = 'main'
         return
 
-# REKLAMA YUBORISH (/send)
+# REKLAMA (/send)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     msg = update.message.text[6:]
@@ -184,7 +184,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
     await update.message.reply_text("✅ Tugadi.")
 
-# AUDIO
+# --- AUDIO CALLBACK (TUZATILGAN JOYI) ---
 async def audio_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -192,10 +192,18 @@ async def audio_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = query.data.split('_')
         lang = data[1]
         text = context.user_data.get('last_translation', 'Hello')
+        
         tts = gTTS(text=text, lang=lang, slow=False)
         filename = "audio.mp3"
         tts.save(filename)
-        await context.bot.send_audio(query.message.chat_id, open(filename, 'rb'), title="Ovoz", performer="Bot")
+        
+        # MANA SHU YERDA ESKI CHIROYLI YOZUVLAR QAYTARILDI:
+        await context.bot.send_audio(
+            chat_id=query.message.chat_id, 
+            audio=open(filename, 'rb'), 
+            title="Tarjima",           # <--- Sarlavha
+            performer=BOT_USERNAME     # <--- Botingiz nomi
+        )
         os.remove(filename)
     except: await query.message.reply_text("Ovoz yo'q.")
 
@@ -207,5 +215,6 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('send', broadcast))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     application.add_handler(CallbackQueryHandler(audio_callback))
-    print("Bot V4.1 ishga tushdi!")
+    print("Bot V4.2 ishga tushdi!")
     application.run_polling()
+        
