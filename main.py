@@ -12,14 +12,15 @@ import uuid
 # --- 1. SOZLAMALAR ---
 BOT_TOKEN = "8387200840:AAFMVfEWUhzB_C-25qjzajpQyRm5aF091hA"
 ADMIN_ID = 8431876566
-BOT_USERNAME = "@telegram_wbot"
+# 🔥 TUZATILDI: Botingizning asl nomi yozildi
+BOT_USERNAME = "@tarjimon_wbot"
 
 # --- 2. FLASK ---
 flask_app = Flask('')
 
 @flask_app.route('/')
 def home():
-    return "Bot V5.0 (Inline Mode) Ishlamoqda!"
+    return "Bot V5.1 (Fixed Name) Ishlamoqda!"
 
 def run_http():
     flask_app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
@@ -92,6 +93,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['lang_name'] = "🇬🇧 English"
         context.user_data['state'] = 'main'
 
+    # Bu yerda endi avtomatik @tarjimon_wbot chiqadi
     await update.message.reply_text(
         f"👋 Salom, <b>{user.first_name}</b>!\n\nBotdan foydalanish uchun quyidagi menyudan foydalaning.\n\n"
         f"🚀 <b>YANGILIK:</b> Endi istalgan chatda <code>{BOT_USERNAME} salom</code> deb yozib ko'ring!",
@@ -130,7 +132,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     elif text == "ℹ️ Info":
-        await update.message.reply_text(f"Bot V5.0\nInline rejim ishlashi uchun istalgan joyda:\n`{BOT_USERNAME} matn` deb yozing.", parse_mode="Markdown")
+        await update.message.reply_text(f"Bot V5.1\nInline rejim: `{BOT_USERNAME} matn`", parse_mode="Markdown")
         return
 
     if text == "👑 Admin Panel" and user_id == ADMIN_ID:
@@ -180,11 +182,12 @@ async def audio_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = query.data.split('_')
         tts = gTTS(text=context.user_data.get('last_translation', 'Hello'), lang=data[1], slow=False)
         tts.save("audio.mp3")
+        # Audio tagida endi @tarjimon_wbot chiqadi
         await context.bot.send_audio(chat_id=query.message.chat_id, audio=open("audio.mp3", 'rb'), title="Tarjima", performer=BOT_USERNAME)
         os.remove("audio.mp3")
     except: await query.message.reply_text("Ovoz yo'q.")
 
-# 🔥 INLINE MODE (YANGI QO'SHILGAN QISM) 🔥
+# 🔥 INLINE MODE 🔥
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.inline_query.query
     if not query:
@@ -230,10 +233,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('send', broadcast))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     application.add_handler(CallbackQueryHandler(audio_callback))
-    
-    # Inline handlerni qo'shamiz
     application.add_handler(InlineQueryHandler(inline_query))
     
-    print("Bot V5.0 (Inline) ishga tushdi!")
+    print("Bot V5.1 ishga tushdi!")
     application.run_polling()
     
