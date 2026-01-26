@@ -3,36 +3,27 @@ import os
 import sqlite3
 from threading import Thread
 from flask import Flask
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from deep_translator import GoogleTranslator
+from gtts import gTTS
 
 # --- 1. SOZLAMALAR ---
-# Yangi tokeningiz:
 BOT_TOKEN = "8387200840:AAFMVfEWUhzB_C-25qjzajpQyRm5aF091hA"
-
-# Sizning Admin ID raqamingiz:
 ADMIN_ID = 8431876566
 
-# --- 2. FLASK (RENDER UCHUN) ---
+# --- 2. FLASK ---
 app = Flask('')
-
 @app.route('/')
-def home():
-    return "Tarjimon Bot Ishlamoqda! (Alive)"
+def home(): return "Bot V3 (Audio) Ishlamoqda!"
+def run_http(): app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+def keep_alive(): t = Thread(target=run_http); t.start()
 
-def run_http():
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
-
-def keep_alive():
-    t = Thread(target=run_http)
-    t.start()
-
-# --- 3. BAZA (SQLITE) ---
+# --- 3. BAZA ---
 def init_db():
     conn = sqlite3.connect('bot_users.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT, lang TEXT)''')
     conn.commit()
     conn.close()
 
@@ -41,67 +32,166 @@ def add_user(user_id, name):
     c = conn.cursor()
     c.execute('SELECT id FROM users WHERE id = ?', (user_id,))
     if c.fetchone() is None:
-        c.execute('INSERT INTO users VALUES (?, ?)', (user_id, name))
+        c.execute('INSERT INTO users VALUES (?, ?, ?)', (user_id, name, 'en'))
         conn.commit()
     conn.close()
 
-def get_all_users():
+def get_users_count():
+    conn = sqlite3.connect('bot_users.db')
+    c = conn.fetchone()[0]
+    return c
+
+def get_all_users_ids():
     conn = sqlite3.connect('bot_users.db')
     c = conn.cursor()
     c.execute('SELECT id FROM users')
     return [row[0] for row in c.fetchall()]
 
-def count_users():
-    conn = sqlite3.connect('bot_users.db')
-    c = conn.cursor()
-    c.execute('SELECT COUNT(*) FROM users')
-    return c.fetchone()[0]
-
-# --- 4. MENYULAR VA TILLAR ---
+# --- 4. TILLAR VA MENYULAR ---
 TILLAR = {
     "🇺🇿 O'zbek": "uz", "🇬🇧 English": "en", "🇷🇺 Русский": "ru",
     "🇰🇷 Korean": "ko", "🇸🇦 Arabic": "ar", "🇹🇷 Turkish": "tr",
-    "🇯🇵 Japanese": "ja", "🇨🇳 Chinese": "zh-CN", "🇫🇷 French": "fr",
-    "🇩🇪 German": "de", "🇮🇳 Hindi": "hi"
+    "🇯🇵 Japanese": "ja", "🇩🇪 German": "de"
 }
 
-def main_menu():
-    return ReplyKeyboardMarkup([
-        [KeyboardButton("🌍 Tarjimon (Tilni tanlash)")],
-        [KeyboardButton("📞 Admin / Taklif"), KeyboardButton("ℹ️ Biz haqimizda")],
-        [KeyboardButton("⚙️ Sozlamalar")]
-    ], resize_keyboard=True)
-
-def lang_menu():
-    keys = list(TILLAR.keys())
-    buttons = [keys[i:i + 2] for i in range(0, len(keys), 2)]
-    buttons.append(["🔙 Bosh menyu"])
+def main_menu_keyboard(user_id):
+    buttons = [
+        [KeyboardButton("🔤 Tarjima qilish"), KeyboardButton("👤 Profilim")],
+        [KeyboardButton("⚙️ Sozlamalar"), KeyboardButton("ℹ️ Info")],
+        [KeyboardButton("📞 Aloqa")]
+    ]
+    if user_id == ADMIN_ID: buttons.append([KeyboardButton("👑 Admin Panel")])
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
-# --- 5. ASOSIY FUNKSIYALAR ---
+def settings_menu_keyboard():
+    return ReplyKeyboardMarkup([[KeyboardButton("🌐 Tilni o'zgartirish")], [KeyboardButton("🔙 Bosh menyu")]], resize_keyboard=True)
+
+def lang_menu_keyboard():
+    keys = list(TILLAR.keys())
+    buttons = [keys[i:i + 2] for i in range(0, len(keys), 2)]
+    buttons.append([KeyboardButton("🔙 Orqaga")])
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+
+# --- 5. ASOSIY KOD ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    add_user(user.id, user.first_name) # Bazaga yozamiz
-    
-    # Default sozlamalar
-    if 'mode' not in context.user_data:
-        context.user_data['mode'] = 'translate'
-        context.user_data['lang'] = 'en'
+    add_user(user.id, user.first_name)
+    if 'target_lang' not in context.user_data:
+        context.user_data['target_lang'] = 'en'
         context.user_data['lang_name'] = "🇬🇧 English"
+        context.user_data['state'] = 'main'
+    await update.message.reply_text(f"👋 Salom, <b>{user.first_name}</b>! Men tayyorman.", reply_markup=main_menu_keyboard(user.id), parse_mode="HTML")
 
-    await update.message.reply_text(
-        f"Assalomu alaykum, {user.first_name}! 👋\n\n"
-        "Men **Universal Tarjimon Botman**.\n"
-        "Matn yozsangiz, uni avtomatik tarjima qilaman.\n\n"
-        "Hozirgi til: **🇬🇧 English** (o'zgartirish uchun menyudan foydalaning).",
-        reply_markup=main_menu()
-    )
-
-# --- ADMIN PANEL ---
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
     user_id = update.effective_user.id
-    if user_id == ADMIN_ID:
+    state = context.user_data.get('state', 'main')
+
+    # Navigatsiya
+    if text == "🔙 Bosh menyu":
+        context.user_data['state'] = 'main'
+        await update.message.reply_text("🏠 Bosh menyu.", reply_markup=main_menu_keyboard(user_id))
+        return
+    if text == "🔙 Orqaga":
+        context.user_data['state'] = 'settings'
+        await update.message.reply_text("⚙️ Sozlamalar:", reply_markup=settings_menu_keyboard())
+        return
+
+    # Menyular
+    if text == "🔤 Tarjima qilish":
+        target = context.user_data.get('lang_name', '🇬🇧 English')
+        await update.message.reply_text(f"Matn yozing ({target} ga o'giraman):", reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Bosh menyu")]], resize_keyboard=True))
+        context.user_data['state'] = 'translating'
+        return
+    elif text == "⚙️ Sozlamalar":
+        context.user_data['state'] = 'settings'
+        await update.message.reply_text("⚙️ Sozlamalar bo'limi:", reply_markup=settings_menu_keyboard())
+        return
+    elif text == "👤 Profilim":
+        lang = context.user_data.get('lang_name', '🇬🇧 English')
+        await update.message.reply_text(f"👤 ID: `{user_id}`\n🌐 Til: {lang}", parse_mode="Markdown")
+        return
+    elif text == "📞 Aloqa":
+        context.user_data['state'] = 'feedback'
+        await update.message.reply_text("Xabaringizni yozing:")
+        return
+
+    # MANTIQ
+    if state == 'settings' and text == "🌐 Tilni o'zgartirish":
+        await update.message.reply_text("Tilni tanlang:", reply_markup=lang_menu_keyboard())
+        context.user_data['state'] = 'changing_lang'
+        return
+
+    if state == 'changing_lang' and text in TILLAR:
+        context.user_data['target_lang'] = TILLAR[text]
+        context.user_data['lang_name'] = text
+        context.user_data['state'] = 'settings'
+        await update.message.reply_text(f"✅ Til o'zgardi: {text}", reply_markup=settings_menu_keyboard())
+        return
+
+    # --- TARJIMA VA AUDIO QISMI ---
+    if state == 'translating':
+        target_code = context.user_data.get('target_lang', 'en')
+        try:
+            # 1. Tarjima
+            tarjima = GoogleTranslator(source='auto', target=target_code).translate(text)
+            
+            # 2. Audio tugmasi (Inline Button)
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔊 Ovozli eshitish", callback_data=f"tts_{target_code}")
+            ]])
+            
+            # 3. Tarjimani saqlab turamiz (Audio uchun)
+            context.user_data['last_translation'] = tarjima
+            
+            await update.message.reply_text(f"📝 <b>Tarjima:</b>\n\n{tarjima}", reply_markup=keyboard, parse_mode="HTML")
+            
+        except Exception as e:
+            await update.message.reply_text("Xatolik.")
+        return
+
+    if state == 'feedback':
+        await context.bot.forward_message(chat_id=ADMIN_ID, from_chat_id=user_id, message_id=update.message.message_id)
+        await update.message.reply_text("✅ Yuborildi!", reply_markup=main_menu_keyboard(user_id))
+        context.user_data['state'] = 'main'
+        return
+
+# --- AUDIO CALLBACK HANDLER ---
+async def audio_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("🎧 Ovoz yuklanmoqda...")
+    
+    try:
+        data = query.data.split('_') # tts, en
+        lang_code = data[1]
+        text_to_speak = context.user_data.get('last_translation', 'Hello')
+        
+        # Ovoz faylini yaratamiz
+        tts = gTTS(text=text_to_speak, lang=lang_code, slow=False)
+        filename = "audio.mp3"
+        tts.save(filename)
+        
+        # Jo'natamiz
+        await context.bot.send_audio(chat_id=query.message.chat_id, audio=open(filename, 'rb'), title="Tarjima ovozi", performer="@telegram_wbot")
+        os.remove(filename) # O'chiramiz
+        
+    except Exception as e:
+        await query.message.reply_text("Ovozli formatda xatolik (bu til qo'llab-quvvatlanmasligi mumkin).")
+
+# --- START ---
+if __name__ == '__main__':
+    init_db()
+    keep_alive()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('send', lambda u,c: None)) # Admin send qoldirildi
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    app.add_handler(CallbackQueryHandler(audio_callback)) # Audio uchun
+    
+    print("Bot V3 (Audio) ishga tushdi!")
+    app.run_polling()
         count = count_users()
         await update.message.reply_text(
             f"👑 **ADMIN PANEL**\n\n"
