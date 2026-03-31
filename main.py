@@ -11,7 +11,7 @@ import uuid
 
 # --- 1. SOZLAMALAR ---
 BOT_TOKEN = "8387200840:AAFMVfEWUhzB_C-25qjzajpQyRm5aF091hA"
-ADMIN_ID = 8431876566
+ADMIN_ID = 8518157443
 BOT_USERNAME = "@tarjimon_wbot"
 
 # --- 2. FLASK ---
