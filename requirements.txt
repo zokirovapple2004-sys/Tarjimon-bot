@@ -1,4 +1,4 @@
-python-telegram-bot
-deep_translator
 flask
+python-telegram-bot
+deep-translator
 gTTS
