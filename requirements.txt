@@ -2,3 +2,7 @@ flask
 python-telegram-bot
 deep-translator
 gTTS
+requests
+SpeechRecognition
+pydub
+ 
